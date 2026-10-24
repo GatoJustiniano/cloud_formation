@@ -1,0 +1,5 @@
+template-file-path: recursos.yaml
+parameters:
+  Proyecto: "globomatics"
+  Ambiente: "dev"
+  TipoInstancia: "t3.micro"
