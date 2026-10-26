@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: Bucket S3 de Globomatics (ejemplo 1)
+Description: Bucket S3 privado de Globomatics (tambien guarda las plantillas hijas de los stacks anidados)
 
 Parameters:
   Proyecto:
@@ -17,11 +17,50 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${Proyecto}-${Ambiente}-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: BorrarVersionesViejas
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
       Tags:
         - Key: Proyecto
           Value: !Ref Proyecto
         - Key: Ambiente
           Value: !Ref Ambiente
+
+  # Rechaza cualquier acceso que no use HTTPS
+  PoliticaBucket:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: SoloHttps
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt Bucket.Arn
+              - !Sub "${Bucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
 
 Outputs:
   NombreBucket:

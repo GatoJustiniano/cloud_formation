@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Servidor EC2 con nginx, reutilizable para Frontend o Backend (stack hijo)
+
+Parameters:
+  Proyecto:
+    Type: String
+
+  Ambiente:
+    Type: String
+
+  Rol:
+    Type: String
+    AllowedValues: [frontend, backend]
+
+  SubredId:
+    Type: AWS::EC2::Subnet::Id
+
+  GrupoSeguridadId:
+    Type: AWS::EC2::SecurityGroup::Id
+
+  NombreClave:
+    Type: AWS::EC2::KeyPair::KeyName
+
+  TipoInstancia:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small]
+
+  ImagenLinux:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Resources:
+  # Endurecimiento de la instancia: IMDSv2 obligatorio y disco cifrado
+  PlantillaLanzamiento:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeType: gp3
+              Encrypted: true
+              DeleteOnTermination: true
+
+  Servidor:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref PlantillaLanzamiento
+        Version: !GetAtt PlantillaLanzamiento.LatestVersionNumber
+      ImageId: !Ref ImagenLinux
+      InstanceType: !Ref TipoInstancia
+      KeyName: !Ref NombreClave
+      SubnetId: !Ref SubredId
+      SecurityGroupIds:
+        - !Ref GrupoSeguridadId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          dnf install -y nginx
+          echo "<h1>${Proyecto} - ${Rol} - ambiente ${Ambiente}</h1><p>Desplegado con stacks anidados</p>" > /usr/share/nginx/html/index.html
+          systemctl enable --now nginx
+      Tags:
+        - Key: Name
+          Value: !Sub "vm-${Proyecto}-${Ambiente}-${Rol}"
+        - Key: Proyecto
+          Value: !Ref Proyecto
+        - Key: Ambiente
+          Value: !Ref Ambiente
+
+Outputs:
+  InstanciaId:
+    Value: !Ref Servidor
+
+  IpPublica:
+    Value: !GetAtt Servidor.PublicIp
+
+  IpPrivada:
+    Value: !GetAtt Servidor.PrivateIp

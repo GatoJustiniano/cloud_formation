@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Firewalls (Security Groups) de Frontend y Backend (stack hijo)
+
+Parameters:
+  Proyecto:
+    Type: String
+
+  Ambiente:
+    Type: String
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+
+  CidrSsh:
+    Type: String
+    Description: Unica IP/rango autorizado para entrar por SSH (ej. 181.115.10.20/32)
+
+Resources:
+  # Frontend: HTTP abierto al mundo, SSH solo desde la IP del administrador
+  GrupoSeguridadFrontend:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Frontend - HTTP publico y SSH restringido
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - Description: HTTP publico
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - Description: SSH solo desde la IP del administrador
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref CidrSsh
+      Tags:
+        - Key: Name
+          Value: !Sub "sg-${Proyecto}-${Ambiente}-frontend"
+
+  # Backend: no es publico; HTTP solo desde el Frontend, SSH solo desde la IP del administrador
+  GrupoSeguridadBackend:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Backend - HTTP solo desde Frontend y SSH restringido
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - Description: HTTP solo desde el Frontend
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !GetAtt GrupoSeguridadFrontend.GroupId
+        - Description: SSH solo desde la IP del administrador
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref CidrSsh
+      Tags:
+        - Key: Name
+          Value: !Sub "sg-${Proyecto}-${Ambiente}-backend"
+
+Outputs:
+  GrupoSeguridadFrontendId:
+    Value: !GetAtt GrupoSeguridadFrontend.GroupId
+
+  GrupoSeguridadBackendId:
+    Value: !GetAtt GrupoSeguridadBackend.GroupId

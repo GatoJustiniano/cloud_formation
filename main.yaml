@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Frontend y Backend de Globomatics armados con stacks anidados (red, seguridad, servidores)
+
+Parameters:
+  Proyecto:
+    Type: String
+    Default: globomatics
+
+  Ambiente:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, qa, prod]
+
+  TipoInstancia:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small]
+
+  NombreClave:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: rsa-ssh-modulo2
+
+  CidrSsh:
+    Type: String
+    Description: Tu IP publica en formato CIDR para SSH (ej. 181.115.10.20/32). Nunca 0.0.0.0/0
+    AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}/(3[0-2]|[12]?\d)$
+    ConstraintDescription: Debe ser un CIDR IPv4, por ejemplo 181.115.10.20/32
+
+Resources:
+  Red:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: red.yaml
+      Parameters:
+        Proyecto: !Ref Proyecto
+        Ambiente: !Ref Ambiente
+
+  Seguridad:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: seguridad.yaml
+      Parameters:
+        Proyecto: !Ref Proyecto
+        Ambiente: !Ref Ambiente
+        VpcId: !GetAtt Red.Outputs.VpcId
+        CidrSsh: !Ref CidrSsh
+
+  Frontend:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: servidor.yaml
+      Parameters:
+        Proyecto: !Ref Proyecto
+        Ambiente: !Ref Ambiente
+        Rol: frontend
+        SubredId: !GetAtt Red.Outputs.SubredPublicaId
+        GrupoSeguridadId: !GetAtt Seguridad.Outputs.GrupoSeguridadFrontendId
+        NombreClave: !Ref NombreClave
+        TipoInstancia: !Ref TipoInstancia
+
+  Backend:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: servidor.yaml
+      Parameters:
+        Proyecto: !Ref Proyecto
+        Ambiente: !Ref Ambiente
+        Rol: backend
+        SubredId: !GetAtt Red.Outputs.SubredPublicaId
+        GrupoSeguridadId: !GetAtt Seguridad.Outputs.GrupoSeguridadBackendId
+        NombreClave: !Ref NombreClave
+        TipoInstancia: !Ref TipoInstancia
+
+Outputs:
+  UrlFrontend:
+    Description: Abrir en el navegador (esperar 1 o 2 minutos)
+    Value: !Sub "http://${Frontend.Outputs.IpPublica}"
+
+  IdFrontend:
+    Description: ID de la instancia EC2 Frontend
+    Value: !GetAtt Frontend.Outputs.InstanciaId
+
+  IpPublicaFrontend:
+    Description: IP publica de la instancia Frontend
+    Value: !GetAtt Frontend.Outputs.IpPublica
+
+  IdBackend:
+    Description: ID de la instancia EC2 Backend
+    Value: !GetAtt Backend.Outputs.InstanciaId
+
+  IpPublicaBackend:
+    Description: IP publica del Backend (solo SSH desde tu IP; HTTP solo desde el Frontend)
+    Value: !GetAtt Backend.Outputs.IpPublica
+
+  IpPrivadaBackend:
+    Description: IP privada del Backend (la que usa el Frontend para llamarlo)
+    Value: !GetAtt Backend.Outputs.IpPrivada
