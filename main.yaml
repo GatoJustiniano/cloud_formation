@@ -71,6 +71,15 @@ Resources:
         NombreClave: !Ref NombreClave
         TipoInstancia: !Ref TipoInstancia
 
+  StackS3Prueba:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      #TemplateURL: https://cfn-templates-codigo-cero-temp-950796416490.s3.us-east-1.amazonaws.com/s3.yaml
+      TemplateURL: s3.yaml
+      Parameters:
+        Proyecto: prueba
+        Ambiente: dev
+
 Outputs:
   UrlFrontend:
     Description: Abrir en el navegador (esperar 1 o 2 minutos)
